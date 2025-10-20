@@ -4,11 +4,10 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.sql import func
 from PIL import Image, ImageOps
-from pillow_heif import register_heif
+import pillow_heif
 import qrcode
 
-# Umożliwia Pillow otwieranie HEIC/HEIF (iPhone'y)
-register_heif()
+pillow_heif.register_heif_opener()
 
 # --------- KONFIG ŚCIEŻEK POD HOSTING ----------
 # Na platformie podmontujesz dysk do /data (lub innej ścieżki) i ustawisz ENV:
