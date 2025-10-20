@@ -1,11 +1,17 @@
 import os
 import uuid
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
+import qrcode
+
+from flask import (
+    Flask, render_template, request, redirect, url_for, session,
+    jsonify, flash, send_from_directory, current_app
+)
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.sql import func
+from werkzeug.utils import secure_filename
+
 from PIL import Image, ImageOps, ExifTags
 import pillow_heif
-import qrcode
 
 pillow_heif.register_heif_opener()
 
@@ -21,7 +27,6 @@ QR_DIR     = os.environ.get("QR_DIR",     os.path.join(os.getcwd(), "static", "q
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(QR_DIR, exist_ok=True)
-
 # -----------------------------------------------
 
 db = SQLAlchemy()
@@ -31,7 +36,6 @@ def create_app():
 
     # Ustaw własny SECRET_KEY w panelu (ENV). Lokalnie fallback (zmień na swój!)
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-change-me')
-
 
     app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{DB_PATH}"
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -50,9 +54,6 @@ def create_app():
 def _event_join_link(event_id):
     return url_for('join', event_id=event_id, _external=True)
 
-def _qr_png(path, data):
-    img = qrcode.make(data)
-    img.save(path)
 
 def _get_current_user_id_for_event(event_id: int):
     data = session.get('user_ids', {})
@@ -82,7 +83,15 @@ def _fix_image_orientation(path):
     except Exception:
         pass
 
+def _normalize_to_jpeg(src_path: str, dst_path: str):
+    img = Image.open(src_path)
+    img = ImageOps.exif_transpose(img)  # napraw orientację
+    img.convert("RGB").save(dst_path, "JPEG", quality=90)
 
+def _qr_png(path: str, data: str):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    img = qrcode.make(data)
+    img.save(path)
 
 # --- MODELE ---
 class Event(db.Model):
@@ -99,6 +108,8 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
     name = db.Column(db.String(120), nullable=False)
+    # Uwaga: trzymamy TYLKO nazwę pliku (np. 'abc.jpg'),
+    # ale kolumna nazywa się historycznie 'photo_path' – nie zmieniamy schematu.
     photo_path = db.Column(db.String(255), nullable=True)
 
 
@@ -109,7 +120,16 @@ class Vote(db.Model):
     candidate_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 
+ALLOWED_EXTS = {'.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'}
+
 def register_routes(app: Flask):
+    @app.get('/u/<path:fname>')
+    def serve_uploads(fname):
+        return send_from_directory(current_app.config['UPLOAD_FOLDER'], fname)
+
+    @app.get('/qr/<path:fname>')
+    def serve_qr(fname):
+        return send_from_directory(current_app.config['QR_FOLDER'], fname)
 
     @app.get('/')
     def index():
@@ -128,11 +148,15 @@ def register_routes(app: Flask):
         db.session.commit()
 
         join_url = _event_join_link(ev.id)
-        qr_path = os.path.join(app.config['QR_FOLDER'], f'event_{ev.id}.png')
-        _qr_png(qr_path, join_url)
-        qr_rel = f'/static/qrs/event_{ev.id}.png'
 
-        return render_template('admin_event.html', event=ev, join_url=join_url, qr_path=qr_rel)
+        qr_filename = f'event_{ev.id}.png'
+        qr_abs_path = os.path.join(current_app.config['QR_FOLDER'], qr_filename)
+        _qr_png(qr_abs_path, join_url)
+
+        # przekazujemy do szablonu publiczny URL przez route /qr/...
+        qr_url = url_for('serve_qr', fname=qr_filename)
+
+        return render_template('admin_event.html', event=ev, join_url=join_url, qr_path=qr_url)
 
     # --- dołączenie użytkownika ---
     @app.get('/e/<int:event_id>/join')
@@ -153,19 +177,35 @@ def register_routes(app: Flask):
             flash('Podaj imię.', 'danger')
             return redirect(url_for('join', event_id=ev.id))
 
-        photo_path = None
+        photo_filename = None
         if photo and photo.filename:
             ext = os.path.splitext(photo.filename)[1].lower()
-            if ext not in ['.jpg', '.jpeg', '.png', '.webp']:
-                flash('Dozwolone formaty: JPG, PNG, WEBP.', 'danger')
+            if ext not in ALLOWED_EXTS:
+                flash('Dozwolone formaty: JPG, PNG, WEBP, HEIC/HEIF.', 'danger')
                 return redirect(url_for('join', event_id=ev.id))
-            fname = f'{uuid.uuid4().hex}{ext}'
-            save_path = os.path.join(app.config['UPLOAD_FOLDER'], fname)
-            photo.save(save_path)
-            _fix_image_orientation(save_path)
-            photo_path = f'/static/uploads/{fname}'
 
-        user = User(event_id=ev.id, name=name, photo_path=photo_path)
+            # bezpieczna baza + losowy sufiks; na wyjściu zawsze .jpg
+            base = secure_filename(os.path.splitext(photo.filename)[0]) or uuid.uuid4().hex
+            fname_jpg = f'{base}-{uuid.uuid4().hex}.jpg'
+
+            # zapisz oryginał tymczasowo
+            tmp_name = f'{uuid.uuid4().hex}{ext}'
+            tmp_path = os.path.join(current_app.config['UPLOAD_FOLDER'], tmp_name)
+            photo.save(tmp_path)
+
+            # obróbka + wymuszenie JPEG
+            final_path = os.path.join(current_app.config['UPLOAD_FOLDER'], fname_jpg)
+            try:
+                _normalize_to_jpeg(tmp_path, final_path)
+            finally:
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+            photo_filename = fname_jpg
+
+        user = User(event_id=ev.id, name=name, photo_path=photo_filename)
         db.session.add(user)
         db.session.commit()
 
@@ -261,15 +301,15 @@ def register_routes(app: Flask):
 
         # dopiero tu faktyczne wyniki
         rows = db.session.execute(db.text("""
-                                          SELECT u.id         AS user_id,
-                                                 u.name       AS name,
-                                                 u.photo_path AS photo_path,
-                                                 COUNT(v.id)  AS votes
-                                          FROM user u
+            SELECT u.id         AS user_id,
+                   u.name       AS name,
+                   u.photo_path AS photo_path,
+                   COUNT(v.id)  AS votes
+            FROM user u
             LEFT JOIN vote v ON v.candidate_user_id = u.id
-                                          WHERE u.event_id = :eid
-                                          GROUP BY u.id, u.name, u.photo_path
-                                          ORDER BY votes DESC, name ASC
+            WHERE u.event_id = :eid
+            GROUP BY u.id, u.name, u.photo_path
+            ORDER BY votes DESC, name ASC
         """), {'eid': ev.id}).mappings().all()
 
         me_id = _get_current_user_id_for_event(ev.id)
@@ -286,4 +326,5 @@ def register_routes(app: Flask):
 app = create_app()
 
 if __name__ == '__main__':
+    # Na Render użyj gunicorn: `gunicorn app:app`
     app.run(host='0.0.0.0', port=5000, debug=True)

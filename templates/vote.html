@@ -97,9 +97,9 @@
           <div class="vote-photo">
             {% if c.photo_path %}
               <img
-                data-src="{{ c.photo_path }}?u={{ c.id }}&e={{ event.id }}"
+                data-src="{{ url_for('serve_uploads', fname=c.photo_path) }}?u={{ c.id }}&e={{ event.id }}"
                 alt="{{ c.name }}"
-                width="800" height="1000"         {# dostosuj proporcje #}
+                width="800" height="1000"
                 loading="eager"
                 decoding="async"
                 fetchpriority="high"
@@ -130,7 +130,7 @@
         <div class="vote-photo">
           {% if c.photo_path %}
             <img
-              src="{{ c.photo_path }}"
+              src="{{ url_for('serve_uploads', fname=c.photo_path) }}"
               alt="{{ c.name }}"
               width="800" height="1000"
               loading="lazy"
@@ -199,14 +199,12 @@
   (function ios17ImageWorkarounds(){
     const ua = navigator.userAgent || "";
     const isIOS = /iPhone|iPad|iPod/i.test(ua);
-    // osVersion ~ "OS 17_5 like Mac OS X"
     const m = ua.match(/OS (\d+)_/);
     const major = m ? parseInt(m[1], 10) : null;
     const isIOS17 = isIOS && major && major < 18;
 
     const imgs = Array.from(document.querySelectorAll('.vote-photo img'));
 
-    // 1) Feature detection AVIF/WebP
     function canUse(type) {
       try {
         const c = document.createElement('canvas');
@@ -215,34 +213,27 @@
       } catch(e) { return false; }
     }
     const supportsWebP = canUse('webp');
-    // AVIF detection by image test (bardziej wiarygodne, ale szybkie):
+
     let supportsAVIF = false;
     (function testAvif(){
       const img = new Image();
       img.onload = () => { supportsAVIF = (img.width > 0) && (img.height > 0); };
       img.onerror = () => { supportsAVIF = false; };
-      // minimalny 1x1 avif
       img.src = 'data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxAAACAG1pZjFhdmlmAAACAW1ldGEAAAAAAAAA';
     })();
 
-    // 2) Na iOS 17 – pozbądź się srcsetów i wymuś JPG query (?fmt=jpg)
     function forceJpegIfNeeded(url) {
       try {
         const u = new URL(url, location.href);
-        // Jeżeli serwer wspiera konwersję (np. Cloudflare/Cloudinary/imgproxy) – dopasuj klucz:
-        // 'fmt', 'format', 'fm', 'output' – wybierz swój. Domyślnie 'fmt'.
         if (!u.searchParams.get('fmt')) u.searchParams.set('fmt', 'jpg');
         return u.toString();
       } catch(e) {
-        // jeśli nie jest poprawnym URL-em, oddaj jak było
         return url;
       }
     }
 
     function prepareImg(img) {
       if (!img) return;
-
-      // jeśli iOS 17 – utnij srcset żeby nie próbował AVIF/WebP
       if (isIOS17) {
         img.removeAttribute('srcset');
         const raw = img.getAttribute('data-src') || img.getAttribute('src');
@@ -256,7 +247,6 @@
 
     imgs.forEach(prepareImg);
 
-    // 3) IntersectionObserver – ustaw src dopiero kiedy widoczne
     const io = ('IntersectionObserver' in window)
       ? new IntersectionObserver((entries) => {
           entries.forEach(entry => {
@@ -277,12 +267,10 @@
       if (io) {
         io.observe(img);
       } else {
-        // fallback bez IO
         img.src = desired;
       }
     });
 
-    // 4) Awaryjny fetch->blob dla iOS 17, gdy <img> nie „startuje”
     async function loadViaFetch(img, url) {
       try {
         const r = await fetch(url, { cache: 'no-store', credentials: 'include' });
@@ -300,13 +288,12 @@
     }
 
     function needsBlobKick(img){
-      // jeśli po krótkim czasie nadal brak naturalWidth – kick
       setTimeout(() => {
         if (!img.complete || img.naturalWidth === 0) {
           const u = img.getAttribute('data-src') || img.src;
           if (u && isIOS17) loadViaFetch(img, u);
         }
-      }, 800); // iOS 17 często „wstaje” do 0.5-0.8s; potem kick
+      }, 800);
     }
 
     imgs.forEach(img => {
