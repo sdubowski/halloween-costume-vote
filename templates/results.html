@@ -43,7 +43,7 @@
       <div class="card p-3 h-100 border-0 shadow-sm text-center"
            style="{% if loop.index0 == 0 %}border: 2px solid gold;{% endif %}">
         {% if row.photo_path %}
-          <img src="{{ row.photo_path }}" class="w-100 rounded mb-2" alt="{{ row.name }}">
+          <img src="{{ url_for('serve_uploads', fname=row.photo_path) }}" class="w-100 rounded mb-2" alt="{{ row.name }}">
         {% endif %}
         <div class="d-flex align-items-center justify-content-between">
           <div class="h5 mb-0">{{ row.name }}</div>
