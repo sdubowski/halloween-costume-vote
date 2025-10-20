@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-center">
+  <div class="card p-4 shadow-sm" style="max-width: 500px; width: 100%;">
+    <h1 class="h4 mb-4 text-center">Utwórz wydarzenie</h1>
+
+    <form method="post" action="{{ url_for('admin_create') }}">
+      <div class="mb-3">
+        <label for="name" class="form-label">Nazwa wydarzenia</label>
+        <input type="text" id="name" name="name" class="form-control">
+      </div>
+
+      <div class="mb-3">
+        <label for="expected_players" class="form-label">Liczba osób</label>
+        <input type="number" id="expected_players" name="expected_players" class="form-control">
+        <div class="form-text">Głosowanie ruszy automatycznie, gdy wszyscy dołączą.</div>
+      </div>
+
+      <div class="d-grid">
+        <button type="submit" class="btn btn-primary">Utwórz & generuj QR</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

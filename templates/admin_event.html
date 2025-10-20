@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-4">Wydarzenie — {{ event.name }}</h1>
+<div class="row g-3">
+  <div class="col-md-6 col-lg-4">
+    <div class="card p-3 h-100">
+      <img src="{{ qr_path }}" alt="QR" class="w-100 mb-2">
+      <div class="small text-muted">Link do dołączenia:</div>
+      <div class="text-truncate"><a class="link-light" href="{{ join_url }}">{{ join_url }}</a></div>
+      <a class="btn btn-sm btn-outline-light mt-3" href="{{ join_url }}" target="_blank">Otwórz link</a>
+    </div>
+  </div>
+</div>
+<div class="mt-4">
+  <a class="btn btn-success" href="{{ url_for('results', event_id=event.id) }}">Zobacz wyniki</a>
+</div>
+{% endblock %}

@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  /* body przewija – brak fixed scrollera */
+  html, body {
+    min-height: 100%;
+    overflow: auto;
+    overscroll-behavior: none;
+  }
+
+  /* mobilny snap (bez overflow na kontenerze) */
+  .vote-snap-container {
+    margin-top: 56px;
+    min-height: calc(100svh - 56px);
+    scroll-snap-type: y mandatory;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+  }
+  .vote-snap-item {
+    min-height: calc(100svh - 56px);
+    scroll-snap-align: start;
+  }
+
+  .vote-card {
+    background: #151522;
+    border: 1px solid #28283a;
+    border-radius: .8rem;
+    padding: 12px;
+    margin: 0 8px;
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .vote-photo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .vote-photo img, .vote-photo picture {
+    width: 100%;
+    height: auto;
+    max-height: 72vh;
+    object-fit: contain;
+    border-radius: .6rem;
+    background: #0b0b12;
+    display: block;
+  }
+
+  .vote-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .vote-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  @media (min-width: 992px) {
+    .vote-snap-container { margin-top: 0; min-height: auto; scroll-snap-type: none; }
+    .vote-snap-item { min-height: auto; }
+    .vote-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+  }
+
+  .btn-primary {
+    background-color: #ff6600;
+    border-color: #ff6600;
+    color: #fff;
+  }
+  .btn-primary:hover {
+    background-color: #ff7e1a;
+    border-color: #ff7e1a;
+  }
+</style>
+
+<h1 class="h4 mb-3 text-center text-warning">Głosowanie 🎃</h1>
+
+{% if candidates %}
+  <!-- MOBILE (scroll-snap; przewija body) -->
+  <div class="vote-snap-container d-lg-none">
+    <form method="post">
+      {% for c in candidates %}
+      <section class="vote-snap-item">
+        <div class="vote-card mx-auto">
+          <div class="vote-photo">
+            {% if c.photo_path %}
+              <img
+                data-src="{{ c.photo_path }}?u={{ c.id }}&e={{ event.id }}"
+                alt="{{ c.name }}"
+                width="800" height="1000"         {# dostosuj proporcje #}
+                loading="eager"
+                decoding="async"
+                fetchpriority="high"
+                crossorigin="anonymous"
+              >
+            {% else %}
+              <div class="text-muted">Brak zdjęcia</div>
+            {% endif %}
+          </div>
+          <div class="vote-footer">
+            <div class="vote-name">{{ c.name }}</div>
+            <button name="candidate_id" value="{{ c.id }}" class="btn btn-primary w-50"
+                    {% if has_voted %}disabled{% endif %}>
+              Zagłosuj
+            </button>
+          </div>
+        </div>
+      </section>
+      {% endfor %}
+    </form>
+  </div>
+
+  <!-- DESKTOP (siatka) -->
+  <form method="post" class="d-none d-lg-block">
+    <div class="vote-grid">
+      {% for c in candidates %}
+      <div class="vote-card">
+        <div class="vote-photo">
+          {% if c.photo_path %}
+            <img
+              src="{{ c.photo_path }}"
+              alt="{{ c.name }}"
+              width="800" height="1000"
+              loading="lazy"
+              decoding="async"
+              crossorigin="anonymous"
+            >
+          {% else %}
+            <div class="text-muted">Brak zdjęcia</div>
+          {% endif %}
+        </div>
+        <div class="vote-footer">
+          <div class="vote-name">{{ c.name }}</div>
+          <button name="candidate_id" value="{{ c.id }}" class="btn btn-outline-light"
+                  {% if has_voted %}disabled{% endif %}>
+            Zagłosuj
+          </button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </form>
+
+{% else %}
+  <div class="alert alert-warning text-center mt-4">
+    Brak innych zarejestrowanych uczestników na razie.
+  </div>
+{% endif %}
+
+<script>
+  // dźwięk po interakcji
+  function primeAudio() {
+    try { localStorage.setItem('allowWinnerSound', '1'); } catch (e) {}
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!window.__ac) window.__ac = new AC();
+      window.__ac.resume && window.__ac.resume();
+    } catch (e) {}
+  }
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[name="candidate_id"]');
+    if (btn) primeAudio();
+  }, {capture:true});
+
+  // auto-przejście do wyników
+  (function autoToResults(){
+    const url = "{{ url_for('wait_status', event_id=event.id) }}";
+    async function tick(){
+      try{
+        const r = await fetch(url, {cache:'no-store'});
+        const d = await r.json();
+        if (d.votes >= d.joined && d.joined > 0) {
+          location.href = "{{ url_for('results', event_id=event.id) }}";
+          return;
+        }
+      }catch(e){}
+      setTimeout(tick, 2000);
+    }
+    tick();
+  })();
+</script>
+
+<script>
+  // ===== iPhone 15 / iOS 17 – specjalne obejścia =====
+  (function ios17ImageWorkarounds(){
+    const ua = navigator.userAgent || "";
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    // osVersion ~ "OS 17_5 like Mac OS X"
+    const m = ua.match(/OS (\d+)_/);
+    const major = m ? parseInt(m[1], 10) : null;
+    const isIOS17 = isIOS && major && major < 18;
+
+    const imgs = Array.from(document.querySelectorAll('.vote-photo img'));
+
+    // 1) Feature detection AVIF/WebP
+    function canUse(type) {
+      try {
+        const c = document.createElement('canvas');
+        if (!c || !c.getContext) return false;
+        return c.toDataURL('image/' + type).indexOf('data:image/' + type) === 0;
+      } catch(e) { return false; }
+    }
+    const supportsWebP = canUse('webp');
+    // AVIF detection by image test (bardziej wiarygodne, ale szybkie):
+    let supportsAVIF = false;
+    (function testAvif(){
+      const img = new Image();
+      img.onload = () => { supportsAVIF = (img.width > 0) && (img.height > 0); };
+      img.onerror = () => { supportsAVIF = false; };
+      // minimalny 1x1 avif
+      img.src = 'data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxAAACAG1pZjFhdmlmAAACAW1ldGEAAAAAAAAA';
+    })();
+
+    // 2) Na iOS 17 – pozbądź się srcsetów i wymuś JPG query (?fmt=jpg)
+    function forceJpegIfNeeded(url) {
+      try {
+        const u = new URL(url, location.href);
+        // Jeżeli serwer wspiera konwersję (np. Cloudflare/Cloudinary/imgproxy) – dopasuj klucz:
+        // 'fmt', 'format', 'fm', 'output' – wybierz swój. Domyślnie 'fmt'.
+        if (!u.searchParams.get('fmt')) u.searchParams.set('fmt', 'jpg');
+        return u.toString();
+      } catch(e) {
+        // jeśli nie jest poprawnym URL-em, oddaj jak było
+        return url;
+      }
+    }
+
+    function prepareImg(img) {
+      if (!img) return;
+
+      // jeśli iOS 17 – utnij srcset żeby nie próbował AVIF/WebP
+      if (isIOS17) {
+        img.removeAttribute('srcset');
+        const raw = img.getAttribute('data-src') || img.getAttribute('src');
+        if (raw) {
+          const forced = forceJpegIfNeeded(raw);
+          img.setAttribute('data-src', forced);
+          if (img.hasAttribute('src')) img.setAttribute('src', forced);
+        }
+      }
+    }
+
+    imgs.forEach(prepareImg);
+
+    // 3) IntersectionObserver – ustaw src dopiero kiedy widoczne
+    const io = ('IntersectionObserver' in window)
+      ? new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            const img = entry.target;
+            const desired = img.getAttribute('data-src');
+            if (desired && img.src !== desired) {
+              img.src = desired;
+            }
+            io.unobserve(img);
+          });
+        }, { root: null, rootMargin: '200px', threshold: 0.01 })
+      : null;
+
+    imgs.forEach(img => {
+      const desired = img.getAttribute('data-src');
+      if (!desired) return;
+      if (io) {
+        io.observe(img);
+      } else {
+        // fallback bez IO
+        img.src = desired;
+      }
+    });
+
+    // 4) Awaryjny fetch->blob dla iOS 17, gdy <img> nie „startuje”
+    async function loadViaFetch(img, url) {
+      try {
+        const r = await fetch(url, { cache: 'no-store', credentials: 'include' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const b = await r.blob();
+        const obj = URL.createObjectURL(b);
+        img.src = obj;
+        img.dataset.objectUrl = obj;
+      } catch (e) {
+        console.error('fetch->blob nie powiódł się dla', url, e);
+        img.removeAttribute('srcset');
+        img.src = 'data:image/svg+xml;utf8,' +
+          encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><rect width="100%" height="100%" fill="#0b0b12"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#ff6600" font-size="28">Nie udało się załadować zdjęcia</text></svg>');
+      }
+    }
+
+    function needsBlobKick(img){
+      // jeśli po krótkim czasie nadal brak naturalWidth – kick
+      setTimeout(() => {
+        if (!img.complete || img.naturalWidth === 0) {
+          const u = img.getAttribute('data-src') || img.src;
+          if (u && isIOS17) loadViaFetch(img, u);
+        }
+      }, 800); // iOS 17 często „wstaje” do 0.5-0.8s; potem kick
+    }
+
+    imgs.forEach(img => {
+      img.addEventListener('error', () => {
+        const u = img.getAttribute('data-src') || img.src;
+        if (u && isIOS17) loadViaFetch(img, u);
+      }, { once: true });
+      needsBlobKick(img);
+    });
+  })();
+</script>
+
+{% endblock %}

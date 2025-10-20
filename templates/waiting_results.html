@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  .wait-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: calc(100vh - 80px);
+    text-align: center;
+    color: #fff;
+  }
+
+  h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #ff6600;
+    text-shadow: 0 0 10px rgba(255, 102, 0, 0.7);
+    margin-bottom: 1rem;
+  }
+
+  .wait-sub {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 2rem;
+  }
+
+  /* animowane kółko ładowania */
+  .pumpkin-loader {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 5px solid rgba(255, 102, 0, 0.25);
+    border-top-color: #ff6600;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1.5rem;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .stats-box {
+    background: #151522;
+    border: 1px solid #28283a;
+    border-radius: 10px;
+    padding: 1rem 1.5rem;
+    color: #ffb366;
+    font-weight: 500;
+  }
+</style>
+
+<div class="wait-container">
+  <div class="pumpkin-loader"></div>
+  <h1>Czekamy na wyniki...</h1>
+  <p class="wait-sub">Nie wszyscy jeszcze oddali głosy 🎃</p>
+
+  <div class="stats-box">
+    <p>Oddano <strong>{{ total_votes }}</strong> z <strong>{{ total_users }}</strong> głosów.</p>
+  </div>
+</div>
+
+<script>
+  // co 5 sekund sprawdzamy, czy już wszyscy zagłosowali
+  setTimeout(() => {
+    window.location.reload();
+  }, 5000);
+</script>
+
+{% endblock %}

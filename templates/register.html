@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-center">
+  <div class="card p-4 shadow-sm" style="max-width: 500px; width: 100%;">
+    <h1 class="h4 mb-4 text-center">Dołącz do wydarzenia: {{ event.name }}</h1>
+
+    <form method="post" enctype="multipart/form-data">
+      <div class="mb-3">
+        <label for="name" class="form-label">Imię (wyświetlane przy głosowaniu)</label>
+        <input type="text" id="name" name="name" class="form-control">
+      </div>
+
+      <div class="mb-3">
+        <label for="photo" class="form-label">Zdjęcie profilowe</label>
+        <input type="file" id="photo" name="photo" class="form-control" accept="image/*" capture="user">
+        <div class="form-text">Na telefonie aparat zostanie zaproponowany automatycznie.</div>
+      </div>
+
+      <div class="d-grid">
+        <button type="submit" class="btn btn-primary">Zapisz i przejdź do głosowania</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

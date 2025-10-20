@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  .results-overlay {
+    position: fixed;
+    inset: 56px 0 0 0;
+    background: rgba(11, 11, 18, 0.75);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .results-wrap.blurred {
+    filter: blur(6px);
+    pointer-events: none;
+    user-select: none;
+  }
+  .reveal-btn {
+    font-size: 1.2rem;
+    font-weight: 700;
+    padding: 16px 26px;
+    background-color: #ff6600;
+    border-color: #ff6600;
+  }
+</style>
+
+<h1 class="h4 mb-3">Wyniki 🎃</h1>
+
+{% if rows and rows[0] %}
+  {% set winner = rows[0] %}
+  <div class="alert alert-success text-center">
+    🏆 <strong>{{ winner.name }}</strong> wygrał(a) głosowanie!
+  </div>
+{% endif %}
+
+<div id="resultsWrap" class="results-wrap blurred">
+  <div class="row g-3 mt-3">
+    {% for row in rows %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card p-3 h-100 border-0 shadow-sm text-center"
+           style="{% if loop.index0 == 0 %}border: 2px solid gold;{% endif %}">
+        {% if row.photo_path %}
+          <img src="{{ row.photo_path }}" class="w-100 rounded mb-2" alt="{{ row.name }}">
+        {% endif %}
+        <div class="d-flex align-items-center justify-content-between">
+          <div class="h5 mb-0">{{ row.name }}</div>
+          <div class="badge bg-success">{{ row.votes }} 💀</div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="mt-4 text-center">
+    <p>Głosujących: <strong>{{ total_voters }}</strong></p>
+    <p>Oddanych głosów: <strong>{{ total_votes }}</strong></p>
+  </div>
+</div>
+
+<div id="resultsOverlay" class="results-overlay">
+  <button id="revealBtn" class="btn btn-primary reveal-btn">Zobacz wyniki</button>
+</div>
+
+{% if rows and rows[0] and me_id == rows[0].user_id %}
+  <audio id="winner-audio" src="{{ url_for('static', filename='audio/winner.mp3') }}" preload="auto" playsinline></audio>
+{% endif %}
+
+<script>
+  (function(){
+    const wrap = document.getElementById('resultsWrap');
+    const ovl  = document.getElementById('resultsOverlay');
+    const btn  = document.getElementById('revealBtn');
+
+    async function reveal(){
+      wrap.classList.remove('blurred');
+      ovl.style.display = 'none';
+
+      const audio = document.getElementById('winner-audio');
+      if (audio){
+        try { await audio.play(); } catch(e){}
+      }
+    }
+
+    btn.addEventListener('click', reveal);
+  })();
+</script>
+
+{% endblock %}

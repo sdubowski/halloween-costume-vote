@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  .wait-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: calc(100vh - 80px);
+    text-align: center;
+    color: #fff;
+  }
+
+  h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #ff6600;
+    text-shadow: 0 0 10px rgba(255, 102, 0, 0.7);
+    margin-bottom: 1rem;
+  }
+
+  .wait-sub {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 2rem;
+  }
+
+  /* animowane kółko ładowania */
+  .pumpkin-loader {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 5px solid rgba(255, 102, 0, 0.25);
+    border-top-color: #ff6600;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1.5rem;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* lista uczestników */
+  .players-list {
+    margin-top: 2rem;
+    max-width: 320px;
+    width: 100%;
+    background: #151522;
+    border: 1px solid #28283a;
+    border-radius: 10px;
+    padding: 1rem;
+  }
+
+  .players-list h2 {
+    font-size: 1.1rem;
+    color: #ffb366;
+    margin-bottom: .5rem;
+  }
+
+  .players-list ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .players-list li {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ddd;
+  }
+
+  .players-list li:last-child {
+    border-bottom: none;
+  }
+</style>
+
+<div class="wait-container">
+  <div class="pumpkin-loader"></div>
+  <h1>Czekamy na wszystkich uczestników...</h1>
+  <p class="wait-sub">Głosowanie ruszy automatycznie, gdy wszyscy dołączą 🎃</p>
+
+  <div class="players-list">
+    <h2>Dołączyli:</h2>
+    <ul id="players"></ul>
+    <p class="text-muted mt-2" id="count"></p>
+  </div>
+</div>
+
+<script>
+  const statusUrl = "{{ url_for('wait_status', event_id=event.id) }}";
+  const playersEl = document.getElementById('players');
+  const countEl = document.getElementById('count');
+
+  async function poll() {
+    try {
+      const res = await fetch(statusUrl, { cache: 'no-store' });
+      const data = await res.json();
+
+      // wyświetl listę użytkowników
+      if (data.players) {
+        playersEl.innerHTML = '';
+        for (const name of data.players) {
+          const li = document.createElement('li');
+          li.textContent = name;
+          playersEl.appendChild(li);
+        }
+        countEl.textContent = `${data.joined} z ${data.expected} uczestników`;
+      }
+
+      // gdy wszyscy dołączą → przejdź do głosowania
+      if (data.joined >= data.expected && data.expected > 0) {
+        location.href = "{{ url_for('vote', event_id=event.id) }}";
+        return;
+      }
+    } catch (e) {}
+    setTimeout(poll, 2000);
+  }
+
+  poll();
+</script>
+
+{% endblock %}
