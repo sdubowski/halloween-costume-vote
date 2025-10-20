@@ -1,9 +1,9 @@
 import os
 import uuid
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.sql import func
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ExifTags
 import pillow_heif
 import qrcode
 
@@ -62,6 +62,25 @@ def _set_current_user_id_for_event(event_id: int, user_id: int):
     data = session.get('user_ids', {})
     data[str(event_id)] = user_id
     session['user_ids'] = data
+
+def _fix_image_orientation(path):
+    try:
+        image = Image.open(path)
+        for orientation in ExifTags.TAGS.keys():
+            if ExifTags.TAGS[orientation] == 'Orientation':
+                break
+        exif = image._getexif()
+        if exif is not None:
+            orientation = exif.get(orientation, 1)
+            if orientation == 3:
+                image = image.rotate(180, expand=True)
+            elif orientation == 6:
+                image = image.rotate(270, expand=True)
+            elif orientation == 8:
+                image = image.rotate(90, expand=True)
+        image.convert("RGB").save(path, "JPEG", quality=90)
+    except Exception:
+        pass
 
 
 

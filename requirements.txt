@@ -1,3 +1,5 @@
+sqlalchemy
+django-qrcode
 flask
 flask_sqlalchemy
 pillow>=10.0.0
