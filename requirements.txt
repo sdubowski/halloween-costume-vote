@@ -1,6 +1,6 @@
 flask
 flask_sqlalchemy
-pillow
-pillow-heif
+pillow>=10.0.0
+pillow-heif>=0.14.0
 gunicorn
 qrcode
