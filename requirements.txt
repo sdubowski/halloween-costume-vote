@@ -1,8 +1,8 @@
-sqlalchemy
-django-qrcode
-flask
-flask_sqlalchemy
-pillow>=10.0.0
+Flask>=3.0
+Flask-SQLAlchemy>=3.1
+SQLAlchemy>=2.0
+gunicorn>=21.2
+Pillow>=10.0.0
 pillow-heif>=0.14.0
-gunicorn
-qrcode
+qrcode[pil]>=7.4
+django-qrcode
